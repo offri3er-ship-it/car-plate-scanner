@@ -10,25 +10,27 @@
         .info-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 10px;
+            gap: 8px;
             margin: 15px 0;
         }
         .info-item {
             display: flex;
             flex-direction: column;
-            gap: 5px;
-            padding: 8px;
+            gap: 4px;
+            padding: 10px;
             background: #f8f9fa;
-            border-radius: 6px;
+            border-radius: 8px;
+            border-left: 4px solid #2481cc;
         }
         .info-label {
             font-weight: 600;
             color: #495057;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
         }
         .info-value {
             color: #212529;
             font-size: 0.9rem;
+            font-weight: 500;
         }
     </style>
 </head>
@@ -62,7 +64,7 @@
         <div class="card" id="manual-input">
             <h3>Или введите номер вручную</h3>
             <input type="text" id="plate-input" placeholder="Например: А123БВ777" 
-                   style="width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #ccc;"
+                   style="width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #ccc; text-align: center; font-size: 16px;"
                    oninput="formatPlateInput(this)">
             <button class="btn primary" onclick="processManualInput()">🔍 Найти информацию</button>
         </div>
@@ -76,7 +78,8 @@
         </div>
         
         <div class="loading hidden" id="loading">
-            <p>⏳ Обрабатываем изображение...</p>
+            <div class="spinner"></div>
+            <p>⏳ Загружаем данные...</p>
         </div>
     </div>
 
