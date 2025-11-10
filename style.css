@@ -463,3 +463,16 @@ input[type="text"]:focus {
 .notification.info {
     background: #17a2b8;
 }
+
+/* Стили для камеры в активном состоянии */
+#camera-container.active {
+    display: block;
+}
+
+#video.visible {
+    display: block;
+}
+
+#capture-btn.visible {
+    display: block;
+}
