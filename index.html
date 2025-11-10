@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Мое Mini App</title>
+    <title>Распознавание автономеров</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         body {
@@ -23,10 +23,12 @@
             background: var(--tg-theme-button-color, #2481cc);
             color: var(--tg-theme-button-text-color, #ffffff);
             border: none;
-            padding: 10px 20px;
+            padding: 12px 24px;
             border-radius: 10px;
             cursor: pointer;
             margin: 5px;
+            width: 100%;
+            font-size: 16px;
         }
         
         .card {
@@ -35,31 +37,95 @@
             border-radius: 12px;
             margin: 10px 0;
         }
+        
+        #camera-container {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        
+        #video {
+            width: 100%;
+            border-radius: 10px;
+            background: #000;
+        }
+        
+        #canvas {
+            display: none;
+        }
+        
+        #capture-btn {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.9);
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+        }
+        
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            background: var(--tg-theme-bg-color);
+            border: 1px solid var(--tg-theme-button-color);
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .hidden {
+            display: none;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Мое Mini App</h1>
+        <h1>📷 Распознавание автономеров</h1>
         
         <div class="card">
-            <h3>Информация о пользователе</h3>
-            <div id="user-data">Загрузка...</div>
+            <h3>Сфотографируйте автомобильный номер</h3>
+            
+            <div id="camera-container">
+                <video id="video" autoplay playsinline></video>
+                <canvas id="canvas"></canvas>
+                <button id="capture-btn" class="btn">📸 Сделать фото</button>
+            </div>
+            
+            <div id="camera-controls">
+                <button class="btn" onclick="initCamera()">🎥 Включить камеру</button>
+                <button class="btn" onclick="switchCamera()">🔄 Переключить камеру</button>
+            </div>
         </div>
         
-        <div class="card">
-            <h3>Действия</h3>
-            <button class="btn" onclick="showAlert()">Показать alert</button>
-            <button class="btn" onclick="changeTheme()">Сменить тему</button>
-            <button class="btn" onclick="sendData()">Отправить данные</button>
+        <div class="card hidden" id="manual-input">
+            <h3>Или введите номер вручную</h3>
+            <input type="text" id="plate-input" placeholder="Например: А123БВ777" 
+                   style="width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #ccc;">
+            <button class="btn" onclick="processManualInput()">🔍 Найти информацию</button>
         </div>
         
-        <div class="card">
-            <h3>Форма</h3>
-            <input type="text" id="input-text" placeholder="Введите текст" style="width: 100%; padding: 10px; margin: 5px 0;">
-            <button class="btn" onclick="saveText()">Сохранить</button>
+        <div id="result-container" class="hidden">
+            <div class="result">
+                <h3>Результат распознавания:</h3>
+                <div id="recognized-plate">Обработка...</div>
+                <div id="vehicle-info"></div>
+            </div>
+        </div>
+        
+        <div class="loading hidden" id="loading">
+            <p>⏳ Обрабатываем изображение...</p>
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
