@@ -2,6 +2,7 @@
 const tg = window.Telegram.WebApp;
 let currentStream = null;
 let usingFrontCamera = false;
+let isCameraActive = false;
 
 // Элементы DOM
 const video = document.getElementById('video');
@@ -10,16 +11,12 @@ const captureBtn = document.getElementById('capture-btn');
 const resultContainer = document.getElementById('result-container');
 const loadingElement = document.getElementById('loading');
 const manualInput = document.getElementById('manual-input');
+const cameraContainer = document.getElementById('camera-container');
 
 // Инициализация приложения
 function init() {
     tg.expand();
     tg.enableClosingConfirmation();
-    tg.BackButton.show();
-    tg.BackButton.onClick(closeCamera);
-    
-    // Показать поле для ручного ввода
-    manualInput.classList.remove('hidden');
     
     // Показать информацию о пользователе
     const user = tg.initDataUnsafe.user;
@@ -27,47 +24,114 @@ function init() {
     
     if (user) {
         userDataElement.innerHTML = `
-            <p><strong>ID:</strong> ${user.id}</p>
-            <p><strong>Имя:</strong> ${user.first_name} ${user.last_name || ''}</p>
-            <p><strong>Username:</strong> @${user.username || 'не указан'}</p>
+            <div class="user-data">
+                <p><strong>ID:</strong> ${user.id}</p>
+                <p><strong>Имя:</strong> ${user.first_name} ${user.last_name || ''}</p>
+                <p><strong>Username:</strong> @${user.username || 'не указан'}</p>
+            </div>
         `;
     } else {
-        userDataElement.innerHTML = '<p>Данные пользователя недоступны</p>';
+        userDataElement.innerHTML = '<div class="user-data"><p>Данные пользователя недоступны</p></div>';
     }
     
     console.log('Mini App инициализирован');
+    
+    // Проверить поддержку камеры
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showCameraError('Ваш браузер не поддерживает камеру');
+    }
+}
+
+// Показать ошибку камеры
+function showCameraError(message) {
+    const cameraSection = document.querySelector('.card:nth-child(2)');
+    cameraSection.innerHTML = `
+        <h3>📷 Сфотографируйте автомобильный номер</h3>
+        <div style="text-align: center; padding: 20px; color: #dc3545;">
+            <p>❌ ${message}</p>
+            <p>Используйте ручной ввод номера</p>
+        </div>
+    `;
 }
 
 // Инициализация камеры
 async function initCamera() {
     try {
+        if (isCameraActive) {
+            closeCamera();
+            return;
+        }
+
+        console.log('Пытаемся включить камеру...');
+        
         const constraints = {
             video: {
                 facingMode: usingFrontCamera ? "user" : "environment",
-                width: { ideal: 1920 },
-                height: { ideal: 1080 }
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
             }
         };
         
+        // Останавливаем предыдущий поток
         if (currentStream) {
             currentStream.getTracks().forEach(track => track.stop());
         }
         
+        // Показываем сообщение о загрузке камеры
+        const cameraControls = document.getElementById('camera-controls');
+        cameraControls.innerHTML = '<p>🔄 Загружаем камеру...</p>';
+        
+        // Получаем доступ к камере
         currentStream = await navigator.mediaDevices.getUserMedia(constraints);
         video.srcObject = currentStream;
         
-        captureBtn.classList.remove('hidden');
+        // Ждем пока видео загрузится
+        video.onloadedmetadata = function() {
+            console.log('Камера успешно загружена');
+            
+            // Показываем видео и кнопку захвата
+            video.style.display = 'block';
+            captureBtn.style.display = 'block';
+            cameraContainer.style.display = 'block';
+            
+            // Обновляем кнопки управления
+            cameraControls.innerHTML = `
+                <button class="btn secondary" onclick="switchCamera()">🔄 Переключить камеру</button>
+                <button class="btn secondary" onclick="closeCamera()">❌ Выключить камеру</button>
+            `;
+            
+            isCameraActive = true;
+        };
         
+        video.onerror = function() {
+            console.error('Ошибка загрузки видео');
+            showCameraError('Ошибка загрузки камеры');
+        };
+
     } catch (error) {
         console.error('Ошибка доступа к камере:', error);
-        tg.showAlert('Не удалось получить доступ к камере. Проверьте разрешения.');
+        
+        let errorMessage = 'Не удалось получить доступ к камере. ';
+        
+        if (error.name === 'NotAllowedError') {
+            errorMessage += 'Разрешите доступ к камере в настройках браузера.';
+        } else if (error.name === 'NotFoundError') {
+            errorMessage += 'Камера не найдена на устройстве.';
+        } else if (error.name === 'NotSupportedError') {
+            errorMessage += 'Ваш браузер не поддерживает камеру.';
+        } else {
+            errorMessage += 'Попробуйте использовать ручной ввод.';
+        }
+        
+        showCameraError(errorMessage);
     }
 }
 
 // Переключение камеры
 function switchCamera() {
     usingFrontCamera = !usingFrontCamera;
-    initCamera();
+    closeCamera();
+    setTimeout(initCamera, 500); // Небольшая задержка перед переключением
 }
 
 // Закрыть камеру
@@ -77,12 +141,22 @@ function closeCamera() {
         currentStream = null;
     }
     video.srcObject = null;
-    captureBtn.classList.add('hidden');
-    tg.BackButton.hide();
+    video.style.display = 'none';
+    captureBtn.style.display = 'none';
+    isCameraActive = false;
+    
+    // Восстанавливаем кнопку включения камеры
+    const cameraControls = document.getElementById('camera-controls');
+    cameraControls.innerHTML = `
+        <button class="btn primary" onclick="initCamera()">🎥 Включить камеру</button>
+        <button class="btn secondary" onclick="switchCamera()">🔄 Переключить камеру</button>
+    `;
 }
 
 // Сделать фото и распознать номер
 captureBtn.addEventListener('click', function() {
+    if (!isCameraActive) return;
+    
     const context = canvas.getContext('2d');
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -90,8 +164,8 @@ captureBtn.addEventListener('click', function() {
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
     
     // Показать индикатор загрузки
-    loadingElement.classList.remove('hidden');
-    resultContainer.classList.add('hidden');
+    showLoading(true);
+    hideResult();
     
     // Распознавание текста с изображения
     recognizePlateFromImage(canvas);
@@ -100,6 +174,8 @@ captureBtn.addEventListener('click', function() {
 // Распознавание номера с помощью Tesseract.js
 async function recognizePlateFromImage(canvasElement) {
     try {
+        showLoading(true);
+        
         const worker = await Tesseract.createWorker('rus', 1, {
             logger: m => console.log(m)
         });
@@ -114,20 +190,13 @@ async function recognizePlateFromImage(canvasElement) {
         
         const cleanedPlate = cleanPlateText(text);
         
-        loadingElement.classList.add('hidden');
-        resultContainer.classList.remove('hidden');
-        
-        document.getElementById('recognized-plate').innerHTML = `
-            <strong>Распознанный номер:</strong> ${cleanedPlate}
-        `;
-        
-        // Отправить номер в бот для получения информации
-        sendPlateToBot(cleanedPlate);
+        showLoading(false);
+        showResult(cleanedPlate, true);
         
     } catch (error) {
         console.error('Ошибка распознавания:', error);
         tg.showAlert('Ошибка при распознавании номера. Попробуйте еще раз.');
-        loadingElement.classList.add('hidden');
+        showLoading(false);
     }
 }
 
@@ -156,13 +225,29 @@ function processManualInput() {
         return;
     }
     
-    loadingElement.classList.remove('hidden');
-    resultContainer.classList.remove('hidden');
+    showResult(plateNumber, false);
+}
+
+// Показать результат
+function showResult(plateNumber, fromCamera) {
+    const source = fromCamera ? 'распознан камерой' : 'введен вручную';
     
     document.getElementById('recognized-plate').innerHTML = `
-        <strong>Введенный номер:</strong> ${plateNumber}
+        <div class="result-item">
+            <strong>Номер ${source}:</strong> ${plateNumber}
+        </div>
     `;
     
+    document.getElementById('vehicle-info').innerHTML = `
+        <div class="result-item">
+            <p>🔍 <strong>Ищем информацию по номеру...</strong></p>
+            <p>Данные будут отправлены в чат с ботом</p>
+        </div>
+    `;
+    
+    showResultContainer();
+    
+    // Отправляем данные в бот
     sendPlateToBot(plateNumber);
 }
 
@@ -181,16 +266,27 @@ function sendPlateToBot(plateNumber) {
     // Отправляем данные в бот
     tg.sendData(JSON.stringify(data));
     
-    // Показываем информацию о транспортном средстве (заглушка)
-    document.getElementById('vehicle-info').innerHTML = `
-        <p>🔍 Ищем информацию по номеру <strong>${plateNumber}</strong>...</p>
-        <p>Данные будут отправлены в чат с ботом</p>
-    `;
-    
     // Закрываем мини-приложение через 3 секунды
     setTimeout(() => {
         tg.close();
     }, 3000);
+}
+
+// Вспомогательные функции
+function showLoading(show) {
+    if (show) {
+        loadingElement.classList.remove('hidden');
+    } else {
+        loadingElement.classList.add('hidden');
+    }
+}
+
+function showResultContainer() {
+    resultContainer.classList.remove('hidden');
+}
+
+function hideResult() {
+    resultContainer.classList.add('hidden');
 }
 
 // Обработчики событий Telegram
