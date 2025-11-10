@@ -131,7 +131,7 @@ async function initCamera() {
 function switchCamera() {
     usingFrontCamera = !usingFrontCamera;
     closeCamera();
-    setTimeout(initCamera, 500); // Небольшая задержка перед переключением
+    setTimeout(initCamera, 500);
 }
 
 // Закрыть камеру
@@ -143,6 +143,7 @@ function closeCamera() {
     video.srcObject = null;
     video.style.display = 'none';
     captureBtn.style.display = 'none';
+    cameraContainer.style.display = 'none';
     isCameraActive = false;
     
     // Восстанавливаем кнопку включения камеры
@@ -208,10 +209,45 @@ function cleanPlateText(text) {
         .substring(0, 9);
 }
 
+// Автоматическое форматирование при вводе
+function formatPlateInput(input) {
+    let value = input.value;
+    
+    // Конвертируем русские буквы в английские для унификации
+    value = value.toUpperCase()
+        .replace(/[АВЕКМНОРСТУХ]/g, function(match) {
+            const mapping = {
+                'А': 'A', 'В': 'B', 'Е': 'E', 'К': 'K', 'М': 'M',
+                'Н': 'H', 'О': 'O', 'Р': 'P', 'С': 'C', 'Т': 'T',
+                'У': 'Y', 'Х': 'X'
+            };
+            return mapping[match] || match;
+        });
+    
+    // Оставляем только разрешенные символы
+    value = value.replace(/[^ABEKMHOPCTYX0-9]/g, '');
+    
+    // Ограничиваем длину
+    value = value.substring(0, 9);
+    
+    input.value = value;
+}
+
 // Обработка ручного ввода
 function processManualInput() {
     const plateInput = document.getElementById('plate-input');
-    const plateNumber = plateInput.value.trim().toUpperCase();
+    let plateNumber = plateInput.value.trim();
+    
+    // Конвертируем русские буквы в английские для унификации
+    plateNumber = plateNumber.toUpperCase()
+        .replace(/[АВЕКМНОРСТУХ]/g, function(match) {
+            const mapping = {
+                'А': 'A', 'В': 'B', 'Е': 'E', 'К': 'K', 'М': 'M',
+                'Н': 'H', 'О': 'O', 'Р': 'P', 'С': 'C', 'Т': 'T',
+                'У': 'Y', 'Х': 'X'
+            };
+            return mapping[match] || match;
+        });
     
     if (!plateNumber) {
         tg.showAlert('Введите номер автомобиля');
