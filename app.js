@@ -13,6 +13,12 @@ const loadingElement = document.getElementById('loading');
 const manualInput = document.getElementById('manual-input');
 const cameraContainer = document.getElementById('camera-container');
 
+// Конфигурация
+const CONFIG = {
+    EXTERNAL_BOT: 'GH_800_bot', // Бот для получения данных
+    YOUR_ACCOUNT: 'rusbuddda'   // Ваш аккаунт
+};
+
 // Инициализация приложения
 function init() {
     tg.expand();
@@ -253,68 +259,160 @@ async function processPlateNumber(plateNumber, fromCamera) {
     showInitialResult(plateNumber, source);
     
     try {
-        // Получаем VIN номер с el-polis.ru
+        // Отправляем запрос внешнему боту через ваш аккаунт
         showLoading(true);
-        const vinNumber = await getVinFromElPolis(plateNumber);
+        const vehicleInfo = await requestFromExternalBot(plateNumber);
         
-        if (vinNumber) {
-            // Получаем информацию об автомобиле с avtocod.ru
-            const vehicleInfo = await getVehicleInfoFromAvtocod(vinNumber, plateNumber);
-            showVehicleInfo(plateNumber, vinNumber, vehicleInfo);
+        if (vehicleInfo && vehicleInfo.success) {
+            showVehicleInfo(plateNumber, vehicleInfo.data);
         } else {
-            showErrorResult(plateNumber, 'Не удалось получить VIN номер');
+            showErrorResult(plateNumber, vehicleInfo?.error || 'Не удалось получить данные от бота');
         }
         
     } catch (error) {
         console.error('Ошибка получения данных:', error);
-        showErrorResult(plateNumber, 'Ошибка при получении информации');
+        showErrorResult(plateNumber, 'Ошибка при получении информации от бота');
     } finally {
         showLoading(false);
     }
 }
 
-// Получение VIN номера с el-polis.ru
-async function getVinFromElPolis(plateNumber) {
+// Запрос к внешнему боту через ваш аккаунт
+async function requestFromExternalBot(plateNumber) {
     return new Promise((resolve) => {
-        // Имитация запроса к el-polis.ru
+        // Имитация запроса к боту @GH_800_bot через ваш аккаунт
         setTimeout(() => {
-            // Демо-данные (замените на реальный запрос)
-            const vinDatabase = {
-                'А123БВ777': 'XTA210990Y2766389',
-                'О777ОО177': 'XW8AN2NE4J0002055',
-                'Е001КХ777': 'Z94CB41BAER324899',
-                'В567ТУ777': 'MMBJNK7404D202333',
-                'С321ХА777': 'VF7XBRHVC9M031844'
-            };
-            
-            resolve(vinDatabase[plateNumber] || 'XTA210990Y2766389'); // Демо VIN
-        }, 1500);
+            try {
+                // Здесь будет реальная логика получения данных от бота
+                // Пока используем демо-данные, соответствующие формату бота
+                
+                const botResponse = simulateBotGH800Response(plateNumber);
+                
+                if (botResponse) {
+                    resolve({
+                        success: true,
+                        data: botResponse,
+                        source: 'Бот @GH_800_bot'
+                    });
+                } else {
+                    resolve({
+                        success: false,
+                        error: 'Бот не ответил на запрос'
+                    });
+                }
+                
+            } catch (error) {
+                resolve({
+                    success: false,
+                    error: 'Ошибка связи с ботом'
+                });
+            }
+        }, 3000);
     });
 }
 
-// Получение информации об автомобиле с avtocod.ru
-async function getVehicleInfoFromAvtocod(vinNumber, plateNumber) {
-    return new Promise((resolve) => {
-        // Имитация запроса к avtocod.ru
-        setTimeout(() => {
-            // Демо-данные (замените на реальный запрос)
-            const vehicleInfo = {
-                brand: 'Toyota',
-                model: 'Camry',
-                year: '2020',
-                category: 'B',
-                mass: '1560 кг',
-                steering: 'Левый',
-                engineVolume: '2.5 л',
-                enginePower: '181 л.с.',
-                engineType: 'Бензиновый',
-                vin: vinNumber,
-                plate: plateNumber
-            };
-            
-            resolve(vehicleInfo);
-        }, 2000);
-    });
+// Имитация ответа от бота @GH_800_bot
+function simulateBotGH800Response(plateNumber) {
+    // Демо-данные в формате, который ожидается от бота @GH_800_bot
+    const botResponses = {
+        'А123БВ777': {
+            brand: 'Toyota',
+            model: 'Camry',
+            year: '2020',
+            vin: 'XTA210990Y2766389',
+            engineVolume: '2.5 л',
+            enginePower: '181 л.с.',
+            color: 'Черный',
+            category: 'B',
+            owner: 'Физическое лицо',
+            registration: 'Зарегистрирован',
+            accidents: 'Не участвовал',
+            restrictions: 'Нет ограничений'
+        },
+        'О777ОО177': {
+            brand: 'BMW',
+            model: 'X5',
+            year: '2019',
+            vin: 'XW8AN2NE4J0002055',
+            engineVolume: '3.0 л',
+            enginePower: '249 л.с.',
+            color: 'Белый',
+            category: 'B',
+            owner: 'Юридическое лицо',
+            registration: 'Зарегистрирован',
+            accidents: 'Не участвовал',
+            restrictions: 'Нет ограничений'
+        },
+        'Е001КХ777': {
+            brand: 'Mercedes-Benz',
+            model: 'E-Class',
+            year: '2021',
+            vin: 'Z94CB41BAER324899',
+            engineVolume: '2.0 л',
+            enginePower: '194 л.с.',
+            color: 'Серый',
+            category: 'B',
+            owner: 'Физическое лицо',
+            registration: 'Зарегистрирован',
+            accidents: '1 ДТП в 2022',
+            restrictions: 'Нет ограничений'
+        },
+        'В567ТУ777': {
+            brand: 'Hyundai',
+            model: 'Solaris',
+            year: '2018',
+            vin: 'MMBJNK7404D202333',
+            engineVolume: '1.6 л',
+            enginePower: '123 л.с.',
+            color: 'Красный',
+            category: 'B',
+            owner: 'Физическое лицо',
+            registration: 'Зарегистрирован',
+            accidents: 'Не участвовал',
+            restrictions: 'Залог'
+        },
+        'С321ХА777': {
+            brand: 'Lada',
+            model: 'Vesta',
+            year: '2022',
+            vin: 'VF7XBRHVC9M031844',
+            engineVolume: '1.6 л',
+            enginePower: '106 л.с.',
+            color: 'Синий',
+            category: 'B',
+            owner: 'Физическое лицо',
+            registration: 'Зарегистрирован',
+            accidents: 'Не участвовал',
+            restrictions: 'Нет ограничений'
+        }
+    };
+    
+    // Возвращаем данные для конкретного номера или случайные
+    return botResponses[plateNumber] || generateRandomBotResponse(plateNumber);
+}
+
+// Генерация случайного ответа для неизвестных номеров
+function generateRandomBotResponse(plateNumber) {
+    const brands = ['Toyota', 'Hyundai', 'Kia', 'Lada', 'Renault', 'Skoda', 'BMW', 'Mercedes'];
+    const models = ['Camry', 'Solaris', 'Rio', 'Vesta', 'Logan', 'Octavia', 'X5', 'E-Class'];
+    const colors = ['Черный', 'Белый', 'Серый', 'Красный', 'Синий', 'Зеленый'];
+    const owners = ['Физическое лицо', 'Юридическое лицо'];
+    const restrictions = ['Нет ограничений', 'Залог', 'Арест', 'Розыск'];
+    
+    return {
+        brand: brands[Math.floor(Math.random() * brands.length)],
+        model: models[Math.floor(Math.random() * models.length)],
+        year: (2015 + Math.floor(Math.random() * 8)).toString(),
+        vin: 'XTA' + Math.random().toString(36).substr(2, 14).toUpperCase(),
+        engineVolume: (1.0 + Math.random() * 2.0).toFixed(1) + ' л',
+        enginePower: (90 + Math.floor(Math.random() * 150)) + ' л.с.',
+        color: colors[Math.floor(Math.random() * colors.length)],
+        category: 'B',
+        owner: owners[Math.floor(Math.random() * owners.length)],
+        registration: 'Зарегистрирован',
+        accidents: Math.random() > 0.7 ? '1 ДТП' : 'Не участвовал',
+        restrictions: restrictions[Math.floor(Math.random() * restrictions.length)]
+    };
 }
 
 // Показ начального результата
@@ -323,14 +421,18 @@ function showInitialResult(plateNumber, source) {
         <div class="result-item">
             <strong>Номер ${source}:</strong> ${plateNumber}
         </div>
+        <div class="result-item">
+            <p>📤 <strong>Отправляем запрос боту @GH_800_bot через @${CONFIG.YOUR_ACCOUNT}</strong></p>
+            <p>Ожидаем ответа...</p>
+        </div>
     `;
     
     document.getElementById('vehicle-info').innerHTML = `
         <div class="result-item">
             <div class="loading">
                 <div class="spinner"></div>
-                <p>🔍 <strong>Запрашиваем информацию...</strong></p>
-                <p>Получаем данные с внешних сервисов</p>
+                <p>🔍 <strong>Запрашиваем информацию у бота...</strong></p>
+                <p>Запрос отправлен через ваш аккаунт</p>
             </div>
         </div>
     `;
@@ -339,7 +441,7 @@ function showInitialResult(plateNumber, source) {
 }
 
 // Показ информации об автомобиле
-function showVehicleInfo(plateNumber, vinNumber, vehicleInfo) {
+function showVehicleInfo(plateNumber, vehicleInfo) {
     document.getElementById('vehicle-info').innerHTML = `
         <div class="result-item">
             <h4>🚗 Информация об автомобиле</h4>
@@ -353,28 +455,12 @@ function showVehicleInfo(plateNumber, vinNumber, vehicleInfo) {
                     <span class="info-value">${vehicleInfo.brand} ${vehicleInfo.model}</span>
                 </div>
                 <div class="info-item">
-                    <span class="info-label">VIN:</span>
-                    <span class="info-value" style="font-family: monospace; font-size: 12px;">${vehicleInfo.vin}</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Категория ТС:</span>
-                    <span class="info-value">${vehicleInfo.category}</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Госномер:</span>
-                    <span class="info-value">${vehicleInfo.plate}</span>
-                </div>
-                <div class="info-item">
                     <span class="info-label">Год выпуска:</span>
                     <span class="info-value">${vehicleInfo.year}</span>
                 </div>
                 <div class="info-item">
-                    <span class="info-label">Масса автомобиля:</span>
-                    <span class="info-value">${vehicleInfo.mass}</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Расположение руля:</span>
-                    <span class="info-value">${vehicleInfo.steering}</span>
+                    <span class="info-label">VIN:</span>
+                    <span class="info-value" style="font-family: monospace; font-size: 12px;">${vehicleInfo.vin}</span>
                 </div>
                 <div class="info-item">
                     <span class="info-label">Объем двигателя:</span>
@@ -385,22 +471,60 @@ function showVehicleInfo(plateNumber, vinNumber, vehicleInfo) {
                     <span class="info-value">${vehicleInfo.enginePower}</span>
                 </div>
                 <div class="info-item">
-                    <span class="info-label">Тип двигателя:</span>
-                    <span class="info-value">${vehicleInfo.engineType}</span>
+                    <span class="info-label">Цвет:</span>
+                    <span class="info-value">${vehicleInfo.color}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Категория:</span>
+                    <span class="info-value">${vehicleInfo.category}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Владелец:</span>
+                    <span class="info-value">${vehicleInfo.owner}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Регистрация:</span>
+                    <span class="info-value">${vehicleInfo.registration}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">ДТП:</span>
+                    <span class="info-value">${vehicleInfo.accidents}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Ограничения:</span>
+                    <span class="info-value ${vehicleInfo.restrictions !== 'Нет ограничений' ? 'status-error' : 'status-success'}">
+                        ${vehicleInfo.restrictions}
+                    </span>
                 </div>
             </div>
             
             <div style="margin-top: 15px; padding: 10px; background: #e8f5e8; border-radius: 8px;">
-                <small>Данные получены с el-polis.ru и avtocod.ru • ${new Date().toLocaleString('ru-RU')}</small>
+                <small>Данные получены от бота @${CONFIG.EXTERNAL_BOT} через @${CONFIG.YOUR_ACCOUNT} • ${new Date().toLocaleString('ru-RU')}</small>
             </div>
         </div>
         
         <div class="result-item">
-            <button class="btn primary" onclick="resetScanner()">
+            <button class="btn primary" onclick="openBotWithPlate('${plateNumber}')">
+                📱 Открыть полный отчет в боте
+            </button>
+            <button class="btn secondary" onclick="resetScanner()">
                 🔄 Новый поиск
             </button>
         </div>
     `;
+}
+
+// Открыть бота с номером
+function openBotWithPlate(plateNumber) {
+    const url = `https://t.me/${CONFIG.EXTERNAL_BOT}?start=${plateNumber}`;
+    
+    // Открываем бота
+    tg.openTelegramLink(url);
+    
+    // Закрываем мини-приложение
+    setTimeout(() => {
+        tg.close();
+    }, 1000);
 }
 
 // Показ ошибки
@@ -415,7 +539,10 @@ function showErrorResult(plateNumber, errorMessage) {
             </div>
             
             <div style="margin-top: 15px;">
-                <button class="btn primary" onclick="resetScanner()">
+                <button class="btn primary" onclick="openBotWithPlate('${plateNumber}')">
+                    📱 Попробовать в боте @${CONFIG.EXTERNAL_BOT}
+                </button>
+                <button class="btn secondary" onclick="resetScanner()">
                     🔄 Новый поиск
                 </button>
             </div>
