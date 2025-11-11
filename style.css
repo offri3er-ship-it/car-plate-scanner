@@ -1,87 +1,81 @@
-/* Стили для ошибки камеры */
-.camera-error {
-    background: white;
-    padding: 30px 20px;
-    border-radius: 16px;
-    text-align: center;
-    margin-bottom: 20px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+/* Стили для обработки изображений */
+.image-container {
+    position: relative;
+    display: inline-block;
 }
 
-.error-icon {
-    font-size: 3rem;
-    margin-bottom: 20px;
+.image-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
 }
 
-.error-solutions {
-    text-align: left;
-    margin-top: 20px;
-}
-
-.solution {
-    background: #f8f9fa;
-    padding: 15px;
-    border-radius: 8px;
-    margin-bottom: 15px;
-}
-
-.solution strong {
-    color: #667eea;
-    display: block;
-    margin-bottom: 8px;
-}
-
-.solution p {
-    margin: 5px 0;
-    font-size: 0.9rem;
-}
-
-/* Стили для загрузки файлов */
-.upload-section {
-    background: white;
-    padding: 20px;
-    border-radius: 16px;
-    margin-bottom: 20px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-}
-
-.upload-area {
-    border: 2px dashed #667eea;
-    border-radius: 12px;
-    padding: 30px 20px;
-    text-align: center;
-    cursor: pointer;
+.processing-area {
     transition: all 0.3s ease;
 }
 
-.upload-area:hover {
-    background: #f8f9ff;
-    border-color: #5a6fd8;
+/* Шаги распознавания */
+.recognition-steps {
+    margin-top: 20px;
+    text-align: left;
 }
 
-.upload-icon {
-    font-size: 2.5rem;
-    margin-bottom: 15px;
-}
-
-.upload-btn {
-    background: #667eea;
-    color: white;
-    border: none;
-    padding: 10px 20px;
+.step {
+    padding: 10px;
+    margin: 5px 0;
+    background: #f8f9fa;
     border-radius: 8px;
-    margin-top: 15px;
-    cursor: pointer;
-    font-weight: 600;
+    border-left: 4px solid #6c757d;
+    transition: all 0.3s ease;
 }
 
-.scan-instruction {
-    position: absolute;
-    bottom: 20px;
-    left: 0;
-    width: 100%;
-    text-align: center;
+.step.active {
+    background: #e7f1ff;
+    border-left-color: #007bff;
+    font-weight: bold;
+}
+
+.step.completed {
+    background: #d4edda;
+    border-left-color: #28a745;
+}
+
+/* Уверенность распознавания */
+.confidence {
+    margin: 10px 0;
+    padding: 8px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
+.confidence.good {
+    background: #d4edda;
+    color: #155724;
+}
+
+.confidence.bad {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.upload-hint {
+    font-size: 0.8rem;
+    color: #666;
+    margin: 8px 0;
+    line-height: 1.3;
+}
+
+.try-btn {
+    background: #6c757d;
     color: white;
+    padding: 10px 20px;
+    margin: 5px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
     font-weight: 600;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+    cursor: pointer;
 }
