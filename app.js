@@ -1,11 +1,38 @@
 class CarPlateChecker {
     constructor() {
+        this.currentStream = null;
+        this.isFrontCamera = true;
+        this.capturedImageData = null;
         this.init();
     }
 
     init() {
+        // Элементы камеры
+        this.video = document.getElementById('cameraVideo');
+        this.canvas = document.getElementById('cameraCanvas');
+        this.captureBtn = document.getElementById('captureBtn');
+        this.switchCamera = document.getElementById('switchCamera');
+        this.previewImg = document.getElementById('previewImg');
+        this.retakeBtn = document.getElementById('retakeBtn');
+        this.processBtn = document.getElementById('processBtn');
+        
+        // Элементы режимов
+        this.modeBtns = document.querySelectorAll('.mode-btn');
+        this.cameraMode = document.getElementById('cameraMode');
+        this.manualMode = document.getElementById('manualMode');
+        
+        // Элементы распознавания
+        this.recognitionStatus = document.getElementById('recognitionStatus');
+        this.recognitionResult = document.getElementById('recognitionResult');
+        this.recognizedPlate = document.getElementById('recognizedPlate');
+        this.useRecognized = document.getElementById('useRecognized');
+        this.tryAgain = document.getElementById('tryAgain');
+        
+        // Элементы ручного ввода
         this.plateInput = document.getElementById('plateInput');
         this.checkButton = document.getElementById('checkButton');
+        
+        // Элементы результатов
         this.loading = document.getElementById('loading');
         this.result = document.getElementById('result');
         this.error = document.getElementById('error');
@@ -16,6 +43,7 @@ class CarPlateChecker {
 
         this.bindEvents();
         this.initTelegram();
+        this.startCamera();
     }
 
     initTelegram() {
@@ -26,21 +54,201 @@ class CarPlateChecker {
     }
 
     bindEvents() {
+        // Переключение режимов
+        this.modeBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const mode = e.target.dataset.mode;
+                this.switchMode(mode);
+            });
+        });
+
+        // Камера
+        this.captureBtn.addEventListener('click', () => this.captureImage());
+        this.switchCamera.addEventListener('click', () => this.switchCameraFn());
+        this.retakeBtn.addEventListener('click', () => this.retakePhoto());
+        this.processBtn.addEventListener('click', () => this.processImage());
+
+        // Распознавание
+        this.useRecognized.addEventListener('click', () => this.useRecognizedPlate());
+        this.tryAgain.addEventListener('click', () => this.retakePhoto());
+
+        // Ручной ввод
         this.checkButton.addEventListener('click', () => this.checkPlate());
         this.plateInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                this.checkPlate();
-            }
+            if (e.key === 'Enter') this.checkPlate();
         });
         
         this.plateInput.addEventListener('input', (e) => {
-            // Автоматическое форматирование номера
             let value = e.target.value.toUpperCase().replace(/[^A-ZА-Я0-9]/g, '');
             e.target.value = value;
         });
 
+        // Общие
         this.newCheckButton.addEventListener('click', () => this.resetForm());
         this.retryButton.addEventListener('click', () => this.resetForm());
+    }
+
+    switchMode(mode) {
+        // Обновляем активные кнопки
+        this.modeBtns.forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.mode === mode);
+        });
+
+        // Показываем соответствующий контент
+        this.cameraMode.classList.toggle('active', mode === 'camera');
+        this.manualMode.classList.toggle('active', mode === 'manual');
+
+        if (mode === 'camera') {
+            this.startCamera();
+        } else {
+            this.stopCamera();
+        }
+    }
+
+    async startCamera() {
+        try {
+            this.stopCamera();
+            
+            const constraints = {
+                video: {
+                    facingMode: this.isFrontCamera ? 'user' : 'environment',
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                }
+            };
+
+            this.currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+            this.video.srcObject = this.currentStream;
+            
+            // Показываем контейнер камеры
+            document.getElementById('cameraContainer').classList.remove('hidden');
+            document.getElementById('capturedImage').classList.add('hidden');
+            
+        } catch (error) {
+            console.error('Ошибка камеры:', error);
+            this.showError('Не удалось подключить камеру');
+        }
+    }
+
+    stopCamera() {
+        if (this.currentStream) {
+            this.currentStream.getTracks().forEach(track => track.stop());
+            this.currentStream = null;
+        }
+    }
+
+    switchCameraFn() {
+        this.isFrontCamera = !this.isFrontCamera;
+        this.startCamera();
+    }
+
+    captureImage() {
+        const context = this.canvas.getContext('2d');
+        this.canvas.width = this.video.videoWidth;
+        this.canvas.height = this.video.videoHeight;
+        
+        context.drawImage(this.video, 0, 0);
+        
+        // Сохраняем данные изображения
+        this.capturedImageData = this.canvas.toDataURL('image/jpeg');
+        this.previewImg.src = this.capturedImageData;
+        
+        // Показываем превью
+        document.getElementById('cameraContainer').classList.add('hidden');
+        document.getElementById('capturedImage').classList.remove('hidden');
+        
+        this.stopCamera();
+    }
+
+    retakePhoto() {
+        document.getElementById('capturedImage').classList.add('hidden');
+        this.recognitionResult.classList.add('hidden');
+        this.recognitionStatus.classList.add('hidden');
+        this.startCamera();
+    }
+
+    async processImage() {
+        this.recognitionStatus.classList.remove('hidden');
+        
+        try {
+            // Используем Tesseract.js для распознавания текста
+            const recognizedText = await this.recognizeWithTesseract(this.capturedImageData);
+            const plateNumber = this.extractPlateNumber(recognizedText);
+            
+            this.showRecognitionResult(plateNumber);
+            
+        } catch (error) {
+            console.error('Ошибка распознавания:', error);
+            this.showRecognitionResult('Не удалось распознать');
+        } finally {
+            this.recognitionStatus.classList.add('hidden');
+        }
+    }
+
+    async recognizeWithTesseract(imageData) {
+        // Динамически загружаем Tesseract
+        const { createWorker } = await import('https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js');
+        
+        const worker = await createWorker('rus', 1, {
+            logger: m => console.log(m)
+        });
+
+        try {
+            const { data: { text } } = await worker.recognize(imageData);
+            await worker.terminate();
+            return text;
+        } catch (error) {
+            await worker.terminate();
+            throw error;
+        }
+    }
+
+    extractPlateNumber(text) {
+        // Очищаем текст и ищем российские номера
+        const cleanText = text.toUpperCase().replace(/[^A-ZА-Я0-9]/g, '');
+        
+        // Паттерны для российских номеров
+        const patterns = [
+            /[АВЕКМНОРСТУХ]\d{3}[АВЕКМНОРСТУХ]{2}\d{2,3}/, // Стандартный
+            /[АВЕКМНОРСТУХ]{2}\d{3}\d{2,3}/, // Две буквы в начале
+            /\d{4}[АВЕКМНОРСТУХ]{2}\d{2,3}/  // Номера прицепов
+        ];
+
+        for (const pattern of patterns) {
+            const match = cleanText.match(pattern);
+            if (match) {
+                return match[0];
+            }
+        }
+
+        // Если не нашли по паттерну, пытаемся найти любую комбинацию из 6-9 символов
+        const potentialPlate = cleanText.match(/[A-ZА-Я0-9]{6,9}/);
+        return potentialPlate ? potentialPlate[0] : 'Не распознан';
+    }
+
+    showRecognitionResult(plateNumber) {
+        this.recognizedPlate.textContent = plateNumber;
+        this.recognitionResult.classList.remove('hidden');
+    }
+
+    useRecognizedPlate() {
+        const plate = this.recognizedPlate.textContent;
+        if (plate && plate !== 'Не распознан') {
+            this.checkAvtocod(plate);
+        }
+    }
+
+    validatePlate(plate) {
+        if (!plate) return false;
+        
+        const patterns = [
+            /^[АВЕКМНОРСТУХ]\d{3}[АВЕКМНОРСТУХ]{2}\d{2,3}$/,
+            /^[АВЕКМНОРСТУХ]{2}\d{3}\d{2,3}$/,
+            /^[АВЕКМНОРСТУХ]{2}\d{4}\d{2,3}$/,
+            /^\d{4}[АВЕКМНОРСТУХ]{2}\d{2,3}$/
+        ];
+        
+        return patterns.some(pattern => pattern.test(plate));
     }
 
     async checkPlate() {
@@ -51,6 +259,10 @@ class CarPlateChecker {
             return;
         }
 
+        this.checkAvtocod(plate);
+    }
+
+    async checkAvtocod(plate) {
         this.showLoading();
         
         try {
@@ -62,29 +274,14 @@ class CarPlateChecker {
         }
     }
 
-    validatePlate(plate) {
-        if (!plate) return false;
-        
-        // Основные форматы российских номеров
-        const patterns = [
-            /^[АВЕКМНОРСТУХ]\d{3}[АВЕКМНОРСТУХ]{2}\d{2,3}$/, // Стандартный
-            /^[АВЕКМНОРСТУХ]{2}\d{3}\d{2,3}$/, // Две буквы в начале
-            /^[АВЕКМНОРСТУХ]{2}\d{4}\d{2,3}$/, // Такси
-            /^\d{4}[АВЕКМНОРСТУХ]{2}\d{2,3}$/  // Номера прицепов
-        ];
-        
-        return patterns.some(pattern => pattern.test(plate));
-    }
-
     async getAvtocodData(plate) {
-        // Формируем URL для Avtocod
         const avtocodUrl = `https://avtocod.ru/proverkaavto/${plate}`;
         
-        // Используем CORS proxy для обхода ограничений
-        const proxyUrl = 'https://api.allorigins.win/raw?url=';
-        const targetUrl = encodeURIComponent(avtocodUrl);
-        
         try {
+            // Используем CORS proxy
+            const proxyUrl = 'https://api.allorigins.win/raw?url=';
+            const targetUrl = encodeURIComponent(avtocodUrl);
+            
             const response = await fetch(proxyUrl + targetUrl, {
                 method: 'GET',
                 headers: {
@@ -92,30 +289,24 @@ class CarPlateChecker {
                 }
             });
 
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
             const html = await response.text();
             return this.extractDataFromHTML(html, plate);
             
         } catch (error) {
-            // Если не удалось получить данные через proxy, показываем ссылку
             console.warn('Proxy failed, showing direct link');
             return {
                 directUrl: avtocodUrl,
-                screenshot: null,
                 data: null
             };
         }
     }
 
     extractDataFromHTML(html, plate) {
-        // Создаем временный DOM для парсинга
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
         
-        // Пытаемся найти основные данные об автомобиле
         const carData = {
             directUrl: `https://avtocod.ru/proverkaavto/${plate}`,
             vin: this.extractVIN(doc),
@@ -168,7 +359,6 @@ class CarPlateChecker {
     showLoading() {
         this.hideAll();
         this.loading.classList.remove('hidden');
-        this.checkButton.disabled = true;
     }
 
     showResult(plate, data) {
@@ -178,7 +368,6 @@ class CarPlateChecker {
         let resultHTML = '';
         
         if (data.directUrl && !data.vin) {
-            // Если не удалось распарсить данные, показываем прямую ссылку
             resultHTML = `
                 <div class="direct-link">
                     <p>Данные успешно получены с Avtocod!</p>
@@ -192,7 +381,6 @@ class CarPlateChecker {
                 </div>
             `;
         } else {
-            // Если удалось распарсить некоторые данные
             resultHTML = `
                 <div class="parsed-data">
                     <div class="data-grid">
@@ -232,33 +420,28 @@ class CarPlateChecker {
         
         this.screenshotContainer.innerHTML = resultHTML;
         this.result.classList.remove('hidden');
-        this.checkButton.disabled = false;
     }
 
     showError(message) {
         this.hideAll();
         this.error.querySelector('p').textContent = message;
         this.error.classList.remove('hidden');
-        this.checkButton.disabled = false;
     }
 
     hideAll() {
         this.loading.classList.add('hidden');
         this.result.classList.add('hidden');
         this.error.classList.add('hidden');
+        this.recognitionStatus.classList.add('hidden');
+        this.recognitionResult.classList.add('hidden');
     }
 
     resetForm() {
         this.hideAll();
         this.plateInput.value = '';
-        this.plateInput.focus();
+        this.switchMode('camera');
     }
 }
-
-// Инициализация приложения
-document.addEventListener('DOMContentLoaded', () => {
-    new CarPlateChecker();
-});
 
 // Добавляем стили для данных
 const additionalStyles = `
@@ -328,3 +511,8 @@ const additionalStyles = `
 const styleSheet = document.createElement('style');
 styleSheet.textContent = additionalStyles;
 document.head.appendChild(styleSheet);
+
+// Инициализация приложения
+document.addEventListener('DOMContentLoaded', () => {
+    new CarPlateChecker();
+});
