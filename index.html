@@ -11,41 +11,78 @@
     <div class="container">
         <header class="header">
             <h1>🚗 Проверка авто по госномеру</h1>
-            <p>Загрузите фото автомобиля с номером</p>
+            <p>Загрузите фото или введите номер вручную</p>
         </header>
 
-        <div class="upload-section">
-            <div class="upload-area" id="uploadArea">
-                <div class="upload-icon">📁</div>
-                <h3>Загрузите фото автомобиля</h3>
-                <p>Номер должен быть четко виден на фото</p>
-                <input type="file" id="fileInput" accept="image/*" class="hidden">
-                <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
-                    Выбрать фото
-                </button>
+        <!-- Переключатель режимов -->
+        <div class="mode-selector">
+            <button class="mode-btn active" data-mode="photo">📷 По фото</button>
+            <button class="mode-btn" data-mode="manual">⌨️ Вручную</button>
+        </div>
+
+        <!-- Режим загрузки фото -->
+        <div id="photoMode" class="mode-content active">
+            <div class="upload-section">
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">📁</div>
+                    <h3>Загрузите фото автомобиля</h3>
+                    <p>Номер должен быть четко виден на фото</p>
+                    <input type="file" id="fileInput" accept="image/*" class="hidden">
+                    <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+                        Выбрать фото
+                    </button>
+                </div>
+
+                <div class="photo-tips">
+                    <h4>📸 Советы для лучшего распознавания:</h4>
+                    <ul>
+                        <li>Сфотографируйте номер крупным планом</li>
+                        <li>Убедитесь, что номер хорошо освещен</li>
+                        <li>Избегайте бликов и теней</li>
+                        <li>Держите камеру прямо напротив номера</li>
+                    </ul>
+                </div>
             </div>
 
-            <div class="photo-tips">
-                <h4>📸 Советы для лучшего распознавания:</h4>
-                <ul>
-                    <li>Сфотографируйте номер крупным планом</li>
-                    <li>Убедитесь, что номер хорошо освещен</li>
-                    <li>Избегайте бликов и теней</li>
-                    <li>Держите камеру прямо напротив номера</li>
-                </ul>
+            <div id="previewSection" class="preview-section hidden">
+                <div class="preview-header">
+                    <h3>Предпросмотр фото</h3>
+                    <button id="changePhoto" class="change-btn">🔄 Сменить фото</button>
+                </div>
+                <div class="image-container">
+                    <img id="previewImg" src="" alt="Preview">
+                    <div class="detection-overlay" id="detectionOverlay"></div>
+                </div>
+                <button id="recognizeBtn" class="recognize-btn">🔍 Распознать номер</button>
             </div>
         </div>
 
-        <div id="previewSection" class="preview-section hidden">
-            <div class="preview-header">
-                <h3>Предпросмотр фото</h3>
-                <button id="changePhoto" class="change-btn">🔄 Сменить фото</button>
+        <!-- Режим ручного ввода -->
+        <div id="manualMode" class="mode-content">
+            <div class="manual-input-section">
+                <div class="input-group">
+                    <input 
+                        type="text" 
+                        id="manualPlateInput" 
+                        placeholder="Например: А123АА777" 
+                        maxlength="9"
+                        class="plate-input"
+                    >
+                    <button id="manualCheckBtn" class="check-btn">Проверить</button>
+                </div>
+                <div class="examples">
+                    <small>Примеры: А123АА777, Х970ХУ777, ЕКХ777, P594KC99</small>
+                </div>
+                <div class="manual-tips">
+                    <h4>💡 Поддерживаемые форматы:</h4>
+                    <ul>
+                        <li>Стандартный: <strong>А123АА777</strong></li>
+                        <li>Спецсерии: <strong>ЕКХ777</strong></li>
+                        <li>Новые форматы: <strong>P594KC99</strong></li>
+                        <li>Двухбуквенные: <strong>ТО12345</strong></li>
+                    </ul>
+                </div>
             </div>
-            <div class="image-container">
-                <img id="previewImg" src="" alt="Preview">
-                <div class="detection-overlay" id="detectionOverlay"></div>
-            </div>
-            <button id="recognizeBtn" class="recognize-btn">🔍 Распознать номер</button>
         </div>
 
         <div id="processing" class="processing hidden">
@@ -82,8 +119,8 @@
                 <p>Введите номер вручную:</p>
             </div>
             <div class="input-group">
-                <input type="text" id="manualPlateInput" placeholder="Например: А123АА777" maxlength="9" class="plate-input">
-                <button id="manualCheckBtn" class="check-btn">Проверить</button>
+                <input type="text" id="fallbackPlateInput" placeholder="Например: А123АА777" maxlength="9" class="plate-input">
+                <button id="fallbackCheckBtn" class="check-btn">Проверить</button>
             </div>
         </div>
 
@@ -109,8 +146,6 @@
         </div>
     </div>
 
-    <!-- Подключаем Google Cloud Vision API -->
-    <script src="https://apis.google.com/js/api.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
