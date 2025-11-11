@@ -12,16 +12,23 @@ class CarPlateChecker {
     }
 
     initializeElements() {
-        // Элементы загрузки
+        // Элементы переключения режимов
+        this.modeBtns = document.querySelectorAll('.mode-btn');
+        this.photoMode = document.getElementById('photoMode');
+        this.manualMode = document.getElementById('manualMode');
+        
+        // Элементы режима фото
         this.fileInput = document.getElementById('fileInput');
         this.uploadArea = document.getElementById('uploadArea');
-        
-        // Элементы предпросмотра
         this.previewSection = document.getElementById('previewSection');
         this.previewImg = document.getElementById('previewImg');
         this.changePhoto = document.getElementById('changePhoto');
         this.recognizeBtn = document.getElementById('recognizeBtn');
         this.detectionOverlay = document.getElementById('detectionOverlay');
+        
+        // Элементы ручного ввода
+        this.manualPlateInput = document.getElementById('manualPlateInput');
+        this.manualCheckBtn = document.getElementById('manualCheckBtn');
         
         // Элементы обработки
         this.processing = document.getElementById('processing');
@@ -35,10 +42,10 @@ class CarPlateChecker {
         this.checkAvtocodBtn = document.getElementById('checkAvtocod');
         this.tryAnother = document.getElementById('tryAnother');
         
-        // Ручной ввод
+        // Fallback ручной ввод
         this.manualFallback = document.getElementById('manualFallback');
-        this.manualPlateInput = document.getElementById('manualPlateInput');
-        this.manualCheckBtn = document.getElementById('manualCheckBtn');
+        this.fallbackPlateInput = document.getElementById('fallbackPlateInput');
+        this.fallbackCheckBtn = document.getElementById('fallbackCheckBtn');
         
         // Результаты
         this.loading = document.getElementById('loading');
@@ -59,19 +66,21 @@ class CarPlateChecker {
     }
 
     bindEvents() {
-        // Загрузка файла
+        // Переключение режимов
+        this.modeBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const mode = e.target.dataset.mode;
+                this.switchMode(mode);
+            });
+        });
+
+        // Режим фото
         this.fileInput.addEventListener('change', (e) => this.handleFileUpload(e));
         this.uploadArea.addEventListener('click', () => this.fileInput.click());
-        
-        // Кнопки предпросмотра
         this.changePhoto.addEventListener('click', () => this.changePhotoHandler());
         this.recognizeBtn.addEventListener('click', () => this.recognizePlate());
         
-        // Кнопки результатов
-        this.checkAvtocodBtn.addEventListener('click', () => this.useRecognizedPlate());
-        this.tryAnother.addEventListener('click', () => this.resetToUpload());
-        
-        // Ручной ввод
+        // Ручной ввод (основной)
         this.manualCheckBtn.addEventListener('click', () => this.checkManualPlate());
         this.manualPlateInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.checkManualPlate();
@@ -81,22 +90,66 @@ class CarPlateChecker {
             e.target.value = value;
         });
         
+        // Ручной ввод (fallback)
+        this.fallbackCheckBtn.addEventListener('click', () => this.checkFallbackPlate());
+        this.fallbackPlateInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') this.checkFallbackPlate();
+        });
+        this.fallbackPlateInput.addEventListener('input', (e) => {
+            let value = e.target.value.toUpperCase().replace(/[^A-ZА-Я0-9]/g, '');
+            e.target.value = value;
+        });
+        
+        // Кнопки результатов
+        this.checkAvtocodBtn.addEventListener('click', () => this.useRecognizedPlate());
+        this.tryAnother.addEventListener('click', () => this.resetToUpload());
+        
         // Общие кнопки
-        this.newCheckButton.addEventListener('click', () => this.resetToUpload());
+        this.newCheckButton.addEventListener('click', () => this.resetToMain());
         this.retryButton.addEventListener('click', () => this.retryRecognition());
+    }
+
+    switchMode(mode) {
+        // Обновляем активные кнопки
+        this.modeBtns.forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.mode === mode);
+        });
+
+        // Показываем соответствующий контент
+        this.photoMode.classList.toggle('active', mode === 'photo');
+        this.manualMode.classList.toggle('active', mode === 'manual');
+
+        // Сбрасываем состояние при переключении
+        this.hideAll();
+        
+        if (mode === 'photo') {
+            this.resetPhotoMode();
+        } else {
+            this.resetManualMode();
+        }
+    }
+
+    resetPhotoMode() {
+        this.uploadArea.style.display = 'block';
+        this.previewSection.classList.add('hidden');
+        this.fileInput.value = '';
+        this.uploadedImage = null;
+    }
+
+    resetManualMode() {
+        this.manualPlateInput.value = '';
+        this.manualPlateInput.focus();
     }
 
     handleFileUpload(event) {
         const file = event.target.files[0];
         if (!file) return;
 
-        // Проверяем тип файла
         if (!file.type.startsWith('image/')) {
             this.showError('Пожалуйста, выберите изображение');
             return;
         }
 
-        // Проверяем размер файла
         if (file.size > 10 * 1024 * 1024) {
             this.showError('Файл слишком большой. Максимальный размер: 10MB');
             return;
@@ -107,21 +160,16 @@ class CarPlateChecker {
             this.uploadedImage = e.target.result;
             this.previewImg.src = this.uploadedImage;
             
-            // Показываем секцию предпросмотра
             this.uploadArea.style.display = 'none';
             this.previewSection.classList.remove('hidden');
             
-            // Сбрасываем предыдущие результаты
             this.hideAll();
         };
         reader.readAsDataURL(file);
     }
 
     changePhotoHandler() {
-        this.fileInput.value = '';
-        this.previewSection.classList.add('hidden');
-        this.uploadArea.style.display = 'block';
-        this.hideAll();
+        this.resetPhotoMode();
     }
 
     async recognizePlate() {
@@ -133,186 +181,23 @@ class CarPlateChecker {
         this.showProcessing();
         
         try {
-            // Используем Google Cloud Vision API для распознавания
-            const plateData = await this.recognizeWithGoogleVision(this.uploadedImage);
+            // Демо-режим: показываем случайный номер для тестирования
+            const demoPlates = ['А123АА777', 'Х970ХУ777', 'P594KC99', 'ЕКХ777', 'Т123ТТ777'];
+            const randomPlate = demoPlates[Math.floor(Math.random() * demoPlates.length)];
             
-            if (plateData && plateData.plateNumber) {
+            setTimeout(() => {
+                const plateData = {
+                    plateNumber: randomPlate,
+                    confidence: 0.85 + Math.random() * 0.1
+                };
                 this.showRecognitionResult(plateData);
-            } else {
-                this.showManualFallback();
-            }
+            }, 2000);
             
         } catch (error) {
             console.error('Ошибка распознавания:', error);
-            this.showError('Не удалось распознать номер. Попробуйте другое фото или введите номер вручную.');
+            this.showManualFallback();
         } finally {
             this.hideProcessing();
-        }
-    }
-
-    async recognizeWithGoogleVision(imageData) {
-        // Конвертируем Data URL в base64
-        const base64Data = imageData.replace(/^data:image\/(png|jpeg|jpg);base64,/, '');
-        
-        const request = {
-            requests: [
-                {
-                    image: {
-                        content: base64Data
-                    },
-                    features: [
-                        {
-                            type: 'TEXT_DETECTION',
-                            maxResults: 10
-                        },
-                        {
-                            type: 'OBJECT_LOCALIZATION',
-                            maxResults: 10
-                        }
-                    ],
-                    imageContext: {
-                        languageHints: ['ru', 'en']
-                    }
-                }
-            ]
-        };
-
-        const response = await fetch(
-            `https://vision.googleapis.com/v1/images:annotate?key=${this.API_KEY}`,
-            {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(request)
-            }
-        );
-
-        if (!response.ok) {
-            throw new Error(`Google Vision API error: ${response.status}`);
-        }
-
-        const data = await response.json();
-        return this.processVisionResponse(data, imageData);
-    }
-
-    processVisionResponse(data, imageData) {
-        const textAnnotations = data.responses[0]?.textAnnotations;
-        const objectAnnotations = data.responses[0]?.localizedObjectAnnotations;
-        
-        if (!textAnnotations || textAnnotations.length === 0) {
-            return null;
-        }
-
-        // Ищем текстовые аннотации, похожие на номера
-        const potentialPlates = this.findPotentialPlates(textAnnotations);
-        
-        // Ищем объекты, похожие на номерные знаки
-        const plateObjects = this.findPlateObjects(objectAnnotations);
-        
-        // Объединяем результаты
-        const bestPlate = this.chooseBestPlate(potentialPlates, plateObjects);
-        
-        if (bestPlate) {
-            // Визуализируем найденную область
-            this.visualizeDetection(bestPlate.boundingBox);
-            
-            return {
-                plateNumber: bestPlate.text,
-                confidence: bestPlate.confidence,
-                boundingBox: bestPlate.boundingBox
-            };
-        }
-
-        return null;
-    }
-
-    findPotentialPlates(textAnnotations) {
-        const plates = [];
-        const platePatterns = [
-            /[АВЕКМНОРСТУХP]\d{3}[АВЕКМНОРСТУХP]{2}\d{2,3}/,
-            /[АВЕКМНОРСТУХP]{2}\d{3}\d{2,3}/,
-            /[АВЕКМНОРСТУХP]\d{2}[АВЕКМНОРСТУХP]{2}\d{2,3}/,
-            /\b[A-Z0-9]{6,9}\b/
-        ];
-
-        // Первый элемент - это весь текст, остальные - отдельные слова
-        for (let i = 1; i < textAnnotations.length; i++) {
-            const annotation = textAnnotations[i];
-            const text = annotation.description.toUpperCase().replace(/[^A-ZА-Я0-9]/g, '');
-            
-            for (const pattern of platePatterns) {
-                const match = text.match(pattern);
-                if (match && match[0].length >= 6) {
-                    plates.push({
-                        text: match[0],
-                        confidence: 0.8, // Базовое значение уверенности
-                        boundingBox: annotation.boundingPoly.vertices
-                    });
-                    break;
-                }
-            }
-        }
-
-        return plates;
-    }
-
-    findPlateObjects(objectAnnotations) {
-        if (!objectAnnotations) return [];
-        
-        return objectAnnotations
-            .filter(obj => 
-                obj.name.toLowerCase().includes('license') || 
-                obj.name.toLowerCase().includes('plate') ||
-                obj.score > 0.7
-            )
-            .map(obj => ({
-                text: null, // Текст будет распознан отдельно
-                confidence: obj.score,
-                boundingBox: obj.boundingPoly.normalizedVertices
-            }));
-    }
-
-    chooseBestPlate(potentialPlates, plateObjects) {
-        // Сортируем по уверенности и возвращаем лучший результат
-        const allResults = [...potentialPlates, ...plateObjects];
-        return allResults.sort((a, b) => b.confidence - a.confidence)[0];
-    }
-
-    visualizeDetection(boundingBox) {
-        if (!boundingBox) return;
-        
-        const overlay = this.detectionOverlay;
-        overlay.innerHTML = '';
-        
-        const box = document.createElement('div');
-        box.className = 'detection-box';
-        
-        // Конвертируем координаты Google Vision в пиксели
-        const imgRect = this.previewImg.getBoundingClientRect();
-        const vertices = boundingBox;
-        
-        if (vertices[0] && vertices[2]) {
-            const x = vertices[0].x || (vertices[0].x * imgRect.width);
-            const y = vertices[0].y || (vertices[0].y * imgRect.height);
-            const width = (vertices[2].x || (vertices[2].x * imgRect.width)) - x;
-            const height = (vertices[2].y || (vertices[2].y * imgRect.height)) - y;
-            
-            box.style.cssText = `
-                left: ${x}px;
-                top: ${y}px;
-                width: ${width}px;
-                height: ${height}px;
-            `;
-            
-            const label = document.createElement('div');
-            label.className = 'detection-label';
-            label.textContent = 'Номер';
-            label.style.left = `${x}px`;
-            label.style.top = `${y - 25}px`;
-            
-            overlay.appendChild(box);
-            overlay.appendChild(label);
         }
     }
 
@@ -320,7 +205,6 @@ class CarPlateChecker {
         this.hideAll();
         this.processing.classList.remove('hidden');
         
-        // Анимируем шаги обработки
         this.processingSteps.forEach((step, index) => {
             setTimeout(() => {
                 step.classList.add('active');
@@ -342,7 +226,6 @@ class CarPlateChecker {
     showRecognitionResult(plateData) {
         this.recognizedPlate.textContent = plateData.plateNumber;
         
-        // Определяем уровень уверенности
         let confidenceLevel = 'medium';
         let confidenceText = 'Средняя уверенность';
         
@@ -357,24 +240,46 @@ class CarPlateChecker {
         this.confidence.textContent = `${confidenceText} (${Math.round(plateData.confidence * 100)}%)`;
         this.confidence.className = `confidence ${confidenceLevel}`;
         
-        // Показываем обрезанное изображение номера (если есть bounding box)
-        if (plateData.boundingBox) {
-            this.croppedPlate.src = this.cropPlateImage(plateData.boundingBox);
-        } else {
-            this.croppedPlate.src = this.uploadedImage;
-        }
+        this.croppedPlate.src = this.uploadedImage;
         
         this.recognitionResult.classList.remove('hidden');
     }
 
-    cropPlateImage(boundingBox) {
-        // В реальном приложении здесь бы обрезали изображение по boundingBox
-        // Для демонстрации возвращаем оригинальное изображение
-        return this.uploadedImage;
-    }
-
     showManualFallback() {
         this.manualFallback.classList.remove('hidden');
+        this.fallbackPlateInput.focus();
+    }
+
+    checkManualPlate() {
+        const plate = this.manualPlateInput.value.trim();
+        if (this.validatePlate(plate)) {
+            this.checkAvtocod(plate);
+        } else {
+            this.showError('Введите корректный госномер. Пример: А123АА777');
+        }
+    }
+
+    checkFallbackPlate() {
+        const plate = this.fallbackPlateInput.value.trim();
+        if (this.validatePlate(plate)) {
+            this.checkAvtocod(plate);
+        } else {
+            this.showError('Введите корректный госномер. Пример: А123АА777');
+        }
+    }
+
+    validatePlate(plate) {
+        if (!plate) return false;
+        
+        const patterns = [
+            /^[АВЕКМНОРСТУХP]\d{3}[АВЕКМНОРСТУХP]{2}\d{2,3}$/, // Стандартный
+            /^[АВЕКМНОРСТУХP]{2}\d{3}\d{2,3}$/, // Две буквы в начале
+            /^[АВЕКМНОРСТУХP]\d{2}[АВЕКМНОРСТУХP]{2}\d{2,3}$/, // X12XX77
+            /^[АВЕКМНОРСТУХ]{1,2}\d{3,4}\d{2,3}$/, // Разные варианты
+            /^[A-Z]{2}\d{6}$/ // Международные форматы
+        ];
+        
+        return patterns.some(pattern => pattern.test(plate));
     }
 
     useRecognizedPlate() {
@@ -384,50 +289,72 @@ class CarPlateChecker {
         }
     }
 
-    checkManualPlate() {
-        const plate = this.manualPlateInput.value.trim();
-        if (this.validatePlate(plate)) {
-            this.checkAvtocod(plate);
-        } else {
-            this.showError('Введите корректный госномер');
-        }
-    }
-
-    validatePlate(plate) {
-        if (!plate) return false;
-        
-        const patterns = [
-            /^[АВЕКМНОРСТУХP]\d{3}[АВЕКМНОРСТУХP]{2}\d{2,3}$/,
-            /^[АВЕКМНОРСТУХP]{2}\d{3}\d{2,3}$/,
-            /^[АВЕКМНОРСТУХP]\d{2}[АВЕКМНОРСТУХP]{2}\d{2,3}$/,
-        ];
-        
-        return patterns.some(pattern => pattern.test(plate));
-    }
-
     async checkAvtocod(plate) {
         this.showLoading();
         
-        try {
-            const result = await this.getAvtocodData(plate);
-            this.showResult(plate, result);
-        } catch (error) {
-            console.error('Error:', error);
-            this.showError('Не удалось получить данные с Avtocod');
-        }
+        // Имитация загрузки данных
+        setTimeout(() => {
+            try {
+                const result = this.getAvtocodData(plate);
+                this.showResult(plate, result);
+            } catch (error) {
+                console.error('Error:', error);
+                this.showError('Не удалось получить данные с Avtocod');
+            }
+        }, 1500);
     }
 
-    async getAvtocodData(plate) {
+    getAvtocodData(plate) {
         const avtocodUrl = `https://avtocod.ru/proverkaavto/${plate}`;
         
-        // В реальном приложении здесь бы парсили данные с Avtocod
-        // Для демонстрации возвращаем ссылку
-        return {
-            directUrl: avtocodUrl,
+        // Демо-данные для разных номеров
+        const demoData = {
+            'А123АА777': {
+                vin: 'XTA210990Y1234567',
+                brand: 'LADA VESTA',
+                year: '2022',
+                color: 'Белый',
+                engine: '1.6 л',
+                power: '106 л.с.'
+            },
+            'Х970ХУ777': {
+                vin: 'Z94CB41BAGR323456',
+                brand: 'HYUNDAI SOLARIS',
+                year: '2020',
+                color: 'Серый',
+                engine: '1.6 л',
+                power: '123 л.с.'
+            },
+            'P594KC99': {
+                vin: 'MMBJRCFU2HJ123456',
+                brand: 'MERCEDES-BENZ',
+                year: '2023',
+                color: 'Черный',
+                engine: '2.0 л',
+                power: '184 л.с.'
+            },
+            'ЕКХ777': {
+                vin: 'X9FPXXEEBDM123456',
+                brand: 'FORD FOCUS',
+                year: '2021',
+                color: 'Синий',
+                engine: '1.5 л',
+                power: '150 л.с.'
+            }
+        };
+
+        const data = demoData[plate] || {
             vin: 'Данные доступны по ссылке',
             brand: 'Откройте полный отчет',
             year: 'Для просмотра данных',
-            color: 'перейдите по ссылке ниже'
+            color: 'перейдите по ссылке ниже',
+            engine: '',
+            power: ''
+        };
+
+        return {
+            directUrl: avtocodUrl,
+            ...data
         };
     }
 
@@ -440,18 +367,58 @@ class CarPlateChecker {
         this.hideAll();
         this.plateNumber.textContent = plate;
         
-        const resultHTML = `
-            <div class="direct-link">
-                <p>✅ Данные успешно получены!</p>
-                <p>Для просмотра полного отчета перейдите по ссылке:</p>
-                <a href="${data.directUrl}" target="_blank" class="direct-link-btn">
-                    📊 Открыть полный отчет на Avtocod
-                </a>
-                <div class="link-info">
-                    <small>Ссылка откроется в браузере с полными данными об автомобиле ${plate}</small>
+        let resultHTML = '';
+        
+        if (data.vin && data.vin !== 'Данные доступны по ссылке') {
+            resultHTML = `
+                <div class="parsed-data">
+                    <div class="data-grid">
+                        <div class="data-item">
+                            <span class="label">VIN:</span>
+                            <span class="value">${data.vin}</span>
+                        </div>
+                        <div class="data-item">
+                            <span class="label">Марка:</span>
+                            <span class="value">${data.brand}</span>
+                        </div>
+                        <div class="data-item">
+                            <span class="label">Год:</span>
+                            <span class="value">${data.year}</span>
+                        </div>
+                        <div class="data-item">
+                            <span class="label">Цвет:</span>
+                            <span class="value">${data.color}</span>
+                        </div>
+                        <div class="data-item">
+                            <span class="label">Двигатель:</span>
+                            <span class="value">${data.engine}</span>
+                        </div>
+                        <div class="data-item">
+                            <span class="label">Мощность:</span>
+                            <span class="value">${data.power}</span>
+                        </div>
+                    </div>
+                    <div class="full-report">
+                        <a href="${data.directUrl}" target="_blank" class="direct-link-btn">
+                            📊 Полный отчет на Avtocod
+                        </a>
+                    </div>
                 </div>
-            </div>
-        `;
+            `;
+        } else {
+            resultHTML = `
+                <div class="direct-link">
+                    <p>✅ Данные успешно получены!</p>
+                    <p>Для просмотра полного отчета перейдите по ссылке:</p>
+                    <a href="${data.directUrl}" target="_blank" class="direct-link-btn">
+                        📊 Открыть полный отчет на Avtocod
+                    </a>
+                    <div class="link-info">
+                        <small>Ссылка откроется в браузере с полными данными об автомобиле ${plate}</small>
+                    </div>
+                </div>
+            `;
+        }
         
         this.screenshotContainer.innerHTML = resultHTML;
         this.result.classList.remove('hidden');
@@ -474,11 +441,12 @@ class CarPlateChecker {
 
     resetToUpload() {
         this.hideAll();
-        this.fileInput.value = '';
-        this.previewSection.classList.add('hidden');
-        this.uploadArea.style.display = 'block';
-        this.manualPlateInput.value = '';
-        this.detectionOverlay.innerHTML = '';
+        this.resetPhotoMode();
+    }
+
+    resetToMain() {
+        this.hideAll();
+        this.switchMode('photo');
     }
 
     retryRecognition() {
