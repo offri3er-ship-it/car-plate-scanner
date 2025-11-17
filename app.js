@@ -4,6 +4,7 @@ class LicensePlateRecognizer {
         this.uploadedImage = null;
         this.originalImage = null;
         this.startTime = null;
+        this.isInitialized = false;
         this.init();
     }
 
@@ -74,30 +75,40 @@ class LicensePlateRecognizer {
         try {
             this.updateProcessingStatus('Загрузка нейросети Tesseract...');
             
-            // Инициализируем Tesseract worker
-            this.worker = await Tesseract.createWorker('rus+eng', 1, {
+            console.log('Initializing Tesseract...');
+            
+            // Инициализируем Tesseract worker с более простыми настройками
+            this.worker = await Tesseract.createWorker('eng+rus', 1, {
                 logger: progress => {
+                    console.log('Tesseract progress:', progress);
                     this.handleTesseractProgress(progress);
                 },
                 errorHandler: err => {
                     console.error('Tesseract error:', err);
-                }
+                },
+                // Более простые настройки для лучшей совместимости
+                gzip: false
             });
 
-            // Настраиваем параметры для номерных знаков
+            console.log('Tesseract worker created');
+
+            // Упрощенные настройки для номерных знаков
             await this.worker.setParameters({
                 tessedit_char_whitelist: 'ABEKMHOPCTYXАВЕКМНОРСТУХ0123456789',
-                tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
-                tessedit_ocr_engine_mode: Tesseract.OEM.LSTM_ONLY,
+                tessedit_pageseg_mode: '7', // SINGLE_TEXT_LINE
+                tessedit_ocr_engine_mode: '1', // OEM_LSTM_ONLY
             });
 
+            console.log('Tesseract parameters set');
+            this.isInitialized = true;
             console.log('Tesseract initialized successfully');
             
         } catch (error) {
             console.error('Failed to initialize Tesseract:', error);
+            this.isInitialized = false;
             this.showError(
                 'Ошибка инициализации',
-                'Не удалось загрузить нейросеть для распознавания текста'
+                'Не удалось загрузить нейросеть для распознавания текста. Обновите страницу и попробуйте снова.'
             );
         }
     }
@@ -181,7 +192,7 @@ class LicensePlateRecognizer {
             return;
         }
 
-        if (!this.worker) {
+        if (!this.isInitialized || !this.worker) {
             this.showError('Ошибка', 'Нейросеть еще не загружена. Подождите немного.');
             return;
         }
@@ -192,21 +203,24 @@ class LicensePlateRecognizer {
         try {
             // Шаг 1: Предобработка изображения
             await this.updateProgressStep(1, true);
+            this.updateProcessingStatus('Улучшение качества изображения...');
             const processedImage = await this.preprocessImage(this.uploadedImage);
             
             // Шаг 2: Поиск области номера
             await this.updateProgressStep(2, true);
+            this.updateProcessingStatus('Поиск номерной пластины...');
             const plateRegion = this.detectRegion.checked ? 
-                await this.detectPlateRegion(processedImage) : null;
+                await this.detectPlateRegion(processedImage) : 
+                { image: processedImage, boundingBox: null };
             
             // Шаг 3: Распознавание текста
             await this.updateProgressStep(3, true);
-            const recognitionResult = await this.recognizeText(
-                plateRegion ? plateRegion.image : processedImage
-            );
+            this.updateProcessingStatus('Распознавание текста нейросетью...');
+            const recognitionResult = await this.recognizeText(plateRegion.image);
             
             // Шаг 4: Валидация результата
             await this.updateProgressStep(4, true);
+            this.updateProcessingStatus('Проверка результата...');
             const validatedResult = this.validateRecognitionResult(recognitionResult);
             
             // Шаг 5: Показ результата
@@ -220,8 +234,6 @@ class LicensePlateRecognizer {
     }
 
     async preprocessImage(imageData) {
-        this.updateProcessingStatus('Улучшение качества изображения...');
-        
         return new Promise((resolve) => {
             const img = new Image();
             img.onload = () => {
@@ -235,7 +247,7 @@ class LicensePlateRecognizer {
                 
                 if (this.enhanceImage.checked) {
                     // Применяем улучшения качества
-                    this.enhanceImageQuality(ctx, canvas.width, canvas.height);
+                    this.enhanceImageQuality(ctx, canvas);
                 }
                 
                 // Обновляем canvas с обработанным изображением
@@ -244,53 +256,50 @@ class LicensePlateRecognizer {
                 this.processedCanvas.height = canvas.height;
                 processedCtx.drawImage(canvas, 0, 0);
                 
-                resolve(canvas.toDataURL());
+                resolve(canvas.toDataURL('image/jpeg', 0.9));
             };
             img.src = imageData;
         });
     }
 
-    enhanceImageQuality(ctx, width, height) {
-        const imageData = ctx.getImageData(0, 0, width, height);
-        const data = imageData.data;
-        
-        // Увеличиваем контраст
-        const contrast = 1.5;
-        const brightness = 10;
-        
-        for (let i = 0; i < data.length; i += 4) {
-            // Яркость
-            data[i] = Math.min(255, Math.max(0, data[i] + brightness));
-            data[i + 1] = Math.min(255, Math.max(0, data[i + 1] + brightness));
-            data[i + 2] = Math.min(255, Math.max(0, data[i + 2] + brightness));
+    enhanceImageQuality(ctx, canvas) {
+        try {
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
             
-            // Контраст
-            data[i] = Math.min(255, Math.max(0, (data[i] - 128) * contrast + 128));
-            data[i + 1] = Math.min(255, Math.max(0, (data[i + 1] - 128) * contrast + 128));
-            data[i + 2] = Math.min(255, Math.max(0, (data[i + 2] - 128) * contrast + 128));
+            // Увеличиваем контраст и яркость
+            const contrast = 1.3;
+            const brightness = 20;
+            
+            for (let i = 0; i < data.length; i += 4) {
+                // Яркость
+                data[i] = Math.min(255, Math.max(0, data[i] + brightness));
+                data[i + 1] = Math.min(255, Math.max(0, data[i + 1] + brightness));
+                data[i + 2] = Math.min(255, Math.max(0, data[i + 2] + brightness));
+                
+                // Контраст
+                data[i] = Math.min(255, Math.max(0, (data[i] - 128) * contrast + 128));
+                data[i + 1] = Math.min(255, Math.max(0, (data[i + 1] - 128) * contrast + 128));
+                data[i + 2] = Math.min(255, Math.max(0, (data[i + 2] - 128) * contrast + 128));
+            }
+            
+            ctx.putImageData(imageData, 0, 0);
+            
+        } catch (error) {
+            console.error('Image enhancement error:', error);
         }
-        
-        ctx.putImageData(imageData, 0, 0);
-        
-        // Применяем шумоподавление
-        ctx.filter = 'contrast(1.2) brightness(1.1) saturate(1.1)';
     }
 
     async detectPlateRegion(imageData) {
-        this.updateProcessingStatus('Поиск номерной пластины...');
-        
-        // В реальном приложении здесь будет сложный алгоритм компьютерного зрения
-        // Для демонстрации используем упрощенный подход
-        
         return new Promise((resolve) => {
             const img = new Image();
             img.onload = () => {
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
                 
-                // Предполагаем, что номер занимает центральную часть изображения
-                const plateWidth = img.width * 0.7;
-                const plateHeight = img.height * 0.3;
+                // Упрощенный алгоритм - берем центральную часть изображения
+                const plateWidth = Math.min(img.width * 0.8, 400);
+                const plateHeight = Math.min(img.height * 0.4, 100);
                 const plateX = (img.width - plateWidth) / 2;
                 const plateY = (img.height - plateHeight) / 2;
                 
@@ -312,7 +321,7 @@ class LicensePlateRecognizer {
                 mainCtx.fillText('Область номера', plateX, plateY - 5);
                 
                 resolve({
-                    image: canvas.toDataURL(),
+                    image: canvas.toDataURL('image/jpeg', 0.9),
                     boundingBox: { x: plateX, y: plateY, width: plateWidth, height: plateHeight }
                 });
             };
@@ -321,36 +330,60 @@ class LicensePlateRecognizer {
     }
 
     async recognizeText(imageData) {
-        this.updateProcessingStatus('Распознавание текста нейросетью...');
-        
-        const { data: { text, confidence, words } } = await this.worker.recognize(imageData);
-        
-        return {
-            text: text.trim(),
-            confidence: confidence,
-            words: words
-        };
+        try {
+            console.log('Starting text recognition...');
+            
+            const result = await this.worker.recognize(imageData, {
+                rectangle: { top: 0, left: 0, width: 100, height: 100 }
+            });
+            
+            console.log('Recognition result:', result);
+            
+            return {
+                text: result.data.text ? result.data.text.trim() : '',
+                confidence: result.data.confidence || 0,
+                words: result.data.words || []
+            };
+            
+        } catch (error) {
+            console.error('Text recognition error:', error);
+            throw new Error('Ошибка при распознавании текста: ' + error.message);
+        }
     }
 
     validateRecognitionResult(result) {
-        this.updateProcessingStatus('Проверка результата...');
-        
         const cleanedText = result.text.toUpperCase().replace(/[^A-ZА-Я0-9]/g, '');
         
-        // Паттерны для российских номеров
+        console.log('Original text:', result.text);
+        console.log('Cleaned text:', cleanedText);
+        
+        // Более гибкие паттерны для российских номеров
         const patterns = [
-            /^[АВЕКМНОРСТУХP]\d{3}[АВЕКМНОРСТУХP]{2}\d{2,3}$/, // Стандартный
-            /^[АВЕКМНОРСТУХP]{2}\d{3}\d{2,3}$/, // Две буквы в начале
-            /^[АВЕКМНОРСТУХP]\d{2}[АВЕКМНОРСТУХP]{2}\d{2,3}$/, // X12XX77
+            /^[АВЕКМНОРСТУХP]\d{3}[АВЕКМНОРСТУХP]{2}\d{2,3}$/, // Стандартный A123AA777
+            /^[АВЕКМНОРСТУХP]{2}\d{3}\d{2,3}$/, // Две буквы AA12377
+            /^[АВЕКМНОРСТУХP]\d{2}[АВЕКМНОРСТУХP]{2}\d{2,3}$/, // A12AA77
+            /^[АВЕКМНОРСТУХP]\d{3}[АВЕКМНОРСТУХP]{2}$/, // Без региона A123AA
+            /^[АВЕКМНОРСТУХP]{2}\d{4,6}$/, // Две буквы + цифры
         ];
 
         let bestMatch = null;
+        let matchedPattern = null;
         
         for (const pattern of patterns) {
             const match = cleanedText.match(pattern);
-            if (match) {
+            if (match && match[0].length >= 5) { // Минимум 5 символов
                 bestMatch = match[0];
+                matchedPattern = pattern;
                 break;
+            }
+        }
+
+        // Если не нашли по паттерну, но текст выглядит как номер
+        if (!bestMatch && cleanedText.length >= 5 && cleanedText.length <= 9) {
+            const hasLetters = /[A-ZА-Я]/.test(cleanedText);
+            const hasNumbers = /\d/.test(cleanedText);
+            if (hasLetters && hasNumbers) {
+                bestMatch = cleanedText;
             }
         }
 
@@ -360,18 +393,28 @@ class LicensePlateRecognizer {
             recognizedPlate: bestMatch,
             confidence: result.confidence,
             isValid: !!bestMatch,
-            words: result.words
+            words: result.words,
+            matchedPattern: matchedPattern
         };
     }
 
     showRecognitionResult(result, plateRegion) {
         const processingTime = Date.now() - this.startTime;
         
-        this.recognizedPlate.textContent = result.recognizedPlate || 'Не распознано';
-        this.plateConfidence.textContent = `Уверенность: ${Math.round(result.confidence)}%`;
-        this.confidenceValue.textContent = `${Math.round(result.confidence)}%`;
+        if (result.recognizedPlate) {
+            this.recognizedPlate.textContent = result.recognizedPlate;
+            this.recognizedPlate.style.color = '#28a745';
+            this.plateConfidence.textContent = `Уверенность: ${Math.round(result.confidence)}%`;
+            this.confidenceValue.textContent = `${Math.round(result.confidence)}%`;
+        } else {
+            this.recognizedPlate.textContent = 'Не распознано';
+            this.recognizedPlate.style.color = '#dc3545';
+            this.plateConfidence.textContent = 'Требуется ручной ввод';
+            this.confidenceValue.textContent = '0%';
+        }
+        
         this.processingTime.textContent = `${(processingTime / 1000).toFixed(1)}с`;
-        this.rawText.textContent = result.originalText;
+        this.rawText.textContent = result.originalText || 'Текст не распознан';
         
         // Определяем качество изображения
         const quality = result.confidence > 80 ? 'Отличное' : 
@@ -380,7 +423,7 @@ class LicensePlateRecognizer {
         this.imageQuality.textContent = quality;
         
         // Отображаем область номера если есть
-        if (plateRegion) {
+        if (plateRegion && plateRegion.boundingBox) {
             const plateCtx = this.plateCanvas.getContext('2d');
             const img = new Image();
             img.onload = () => {
@@ -391,10 +434,28 @@ class LicensePlateRecognizer {
             img.src = plateRegion.image;
             
             this.plateSize.textContent = `${plateRegion.boundingBox.width}x${plateRegion.boundingBox.height}`;
+        } else {
+            this.plateSize.textContent = 'Весь кадр';
         }
 
         this.hideAll();
         this.result.classList.remove('hidden');
+        
+        // Если номер не распознан, показываем подсказки
+        if (!result.recognizedPlate) {
+            setTimeout(() => {
+                this.showError(
+                    'Номер не распознан',
+                    'Автоматическое распознавание не дало результата',
+                    [
+                        'Попробуйте другое фото с лучшим освещением',
+                        'Убедитесь, что номер занимает большую часть кадра',
+                        'Избегайте бликов и теней',
+                        'Или введите номер вручную ниже'
+                    ]
+                );
+            }, 1000);
+        }
     }
 
     handleTesseractProgress(progress) {
@@ -402,28 +463,47 @@ class LicensePlateRecognizer {
             const percent = Math.round(progress.progress * 100);
             this.updateProcessingStatus(`Распознавание: ${percent}%`);
             this.updateProcessingProgress(percent);
+        } else {
+            this.updateProcessingStatus(this.getStatusText(progress.status));
         }
     }
 
+    getStatusText(status) {
+        const statusMap = {
+            'loading tesseract core': 'Загрузка ядра Tesseract',
+            'initializing tesseract': 'Инициализация Tesseract',
+            'loading language traineddata': 'Загрузка языковых данных',
+            'initializing api': 'Инициализация API',
+            'recognizing text': 'Распознавание текста'
+        };
+        return statusMap[status] || status;
+    }
+
     updateProcessingStatus(status) {
-        this.processingStatus.textContent = status;
+        if (this.processingStatus) {
+            this.processingStatus.textContent = status;
+        }
     }
 
     updateProcessingProgress(percent) {
-        this.processingProgress.textContent = `${percent}%`;
+        if (this.processingProgress) {
+            this.processingProgress.textContent = `${percent}%`;
+        }
     }
 
     async updateProgressStep(stepNumber, completed = false) {
         return new Promise(resolve => {
             setTimeout(() => {
                 const step = this.progressSteps[stepNumber - 1];
-                if (completed) {
-                    step.classList.add('completed');
-                } else {
-                    step.classList.add('active');
+                if (step) {
+                    if (completed) {
+                        step.classList.add('completed');
+                    } else {
+                        step.classList.add('active');
+                    }
                 }
                 resolve();
-            }, 500);
+            }, 800);
         });
     }
 
@@ -433,20 +513,26 @@ class LicensePlateRecognizer {
         
         // Сбрасываем шаги прогресса
         this.progressSteps.forEach(step => {
-            step.classList.remove('active', 'completed');
+            if (step) {
+                step.classList.remove('active', 'completed');
+            }
         });
-        this.progressSteps[0].classList.add('active');
+        
+        if (this.progressSteps[0]) {
+            this.progressSteps[0].classList.add('active');
+        }
     }
 
     showRecognitionError(error) {
+        console.error('Recognition error details:', error);
         this.showError(
             'Ошибка распознавания',
-            'Не удалось распознать номер на изображении',
+            'Произошла ошибка при обработке изображения',
             [
-                'Убедитесь, что номер четко виден и хорошо освещен',
-                'Попробуйте сфотографировать номер крупным планом',
-                'Избегайте бликов и теней на номере',
-                'Держите камеру прямо напротив номера'
+                'Проверьте подключение к интернету',
+                'Попробуйте фото меньшего размера',
+                'Убедитесь, что фото четкое и хорошо освещенное',
+                'Обновите страницу и попробуйте снова'
             ]
         );
     }
@@ -461,9 +547,9 @@ class LicensePlateRecognizer {
                     ${suggestions.map(suggestion => `<li>${suggestion}</li>`).join('')}
                 </ul>
             `;
-            this.errorSuggestions.classList.remove('hidden');
+            this.errorSuggestions.style.display = 'block';
         } else {
-            this.errorSuggestions.classList.add('hidden');
+            this.errorSuggestions.style.display = 'none';
         }
         
         this.hideAll();
@@ -491,7 +577,9 @@ class LicensePlateRecognizer {
     retryRecognition() {
         this.hideAll();
         this.previewSection.classList.remove('hidden');
-        this.recognizePlate();
+        setTimeout(() => {
+            this.recognizePlate();
+        }, 500);
     }
 
     toggleManualInput() {
@@ -504,7 +592,7 @@ class LicensePlateRecognizer {
         if (this.validatePlate(plate)) {
             this.checkAvtocod(plate);
         } else {
-            this.showError('Ошибка', 'Введите корректный госномер');
+            this.showError('Ошибка', 'Введите корректный госномер. Пример: А123АА777');
         }
     }
 
@@ -525,12 +613,26 @@ class LicensePlateRecognizer {
         if (plateNumber && plateNumber !== 'Не распознано') {
             const avtocodUrl = `https://avtocod.ru/proverkaavto/${plateNumber}`;
             window.open(avtocodUrl, '_blank');
+        } else {
+            this.showError('Ошибка', 'Сначала распознайте номер или введите его вручную');
         }
     }
 
     saveResults() {
         // В реальном приложении здесь бы сохраняли результаты
-        alert('Функция сохранения будет реализована в будущем');
+        const plate = this.recognizedPlate.textContent;
+        if (plate && plate !== 'Не распознано') {
+            const text = `Распознанный номер: ${plate}\nВремя: ${new Date().toLocaleString()}`;
+            const blob = new Blob([text], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `номер_${plate}_${Date.now()}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } else {
+            alert('Нет данных для сохранения');
+        }
     }
 
     async destroy() {
@@ -543,4 +645,9 @@ class LicensePlateRecognizer {
 // Инициализация приложения
 document.addEventListener('DOMContentLoaded', () => {
     window.recognizer = new LicensePlateRecognizer();
+});
+
+// Обработка ошибок Tesseract
+window.addEventListener('error', (event) => {
+    console.error('Global error:', event.error);
 });
