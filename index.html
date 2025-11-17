@@ -3,107 +3,215 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Проверка авто по госномеру</title>
+    <title>Распознавание автомобильных номеров</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@4.10.0/dist/tf-backend-webgl.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
         <header class="header">
-            <h1>🚗 Проверка авто по госномеру</h1>
-            <p>Сфотографируйте номер или введите вручную</p>
+            <h1>🚗 Распознавание номеров</h1>
+            <p>Загрузите фото автомобильного номера</p>
         </header>
 
-        <div class="mode-selector">
-            <button class="mode-btn active" data-mode="camera">📷 Камера</button>
-            <button class="mode-btn" data-mode="manual">⌨️ Вручную</button>
-        </div>
+        <div class="upload-section">
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">📷</div>
+                <h3>Загрузите фото номерного знака</h3>
+                <p>Для лучшего результата сфотографируйте номер крупным планом</p>
+                <input type="file" id="fileInput" accept="image/*" class="hidden">
+                <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+                    Выбрать фото
+                </button>
+            </div>
 
-        <!-- Режим камеры -->
-        <div id="cameraMode" class="mode-content active">
-            <div class="camera-section">
-                <div id="cameraContainer" class="camera-container">
-                    <video id="cameraVideo" autoplay playsinline></video>
-                    <canvas id="cameraCanvas" class="hidden"></canvas>
-                    <div class="camera-overlay">
-                        <div class="scan-frame">
-                            <div class="scan-corner top-left"></div>
-                            <div class="scan-corner top-right"></div>
-                            <div class="scan-corner bottom-left"></div>
-                            <div class="scan-corner bottom-right"></div>
-                        </div>
-                    </div>
+            <div class="quality-tips">
+                <div class="tip-card">
+                    <h4>✅ Хорошие примеры:</h4>
+                    <ul>
+                        <li>Четкий крупный план номера</li>
+                        <li>Хорошее освещение</li>
+                        <li>Прямой угол съемки</li>
+                        <li>Контрастный текст</li>
+                    </ul>
                 </div>
-                
-                <div class="camera-controls">
-                    <button id="captureBtn" class="capture-btn">📸 Сфотографировать</button>
-                    <button id="switchCamera" class="switch-btn">🔄 Камера</button>
-                </div>
-
-                <div id="capturedImage" class="captured-image hidden">
-                    <img id="previewImg" src="" alt="Captured">
-                    <div class="capture-actions">
-                        <button id="retakeBtn" class="retake-btn">🔄 Переснять</button>
-                        <button id="processBtn" class="process-btn">🔍 Распознать номер</button>
-                    </div>
+                <div class="tip-card">
+                    <h4>❌ Плохие примеры:</h4>
+                    <ul>
+                        <li>Размытое изображение</li>
+                        <li>Слишком темно или есть блики</li>
+                        <li>Номер под углом</li>
+                        <li>Маленький размер номера в кадре</li>
+                    </ul>
                 </div>
             </div>
         </div>
 
-        <!-- Режим ручного ввода -->
-        <div id="manualMode" class="mode-content">
-            <div class="input-section">
-                <div class="input-group">
-                    <input 
-                        type="text" 
-                        id="plateInput" 
-                        placeholder="Например: А123АА777" 
-                        maxlength="9"
-                        class="plate-input"
-                    >
-                    <button id="checkButton" class="check-btn">Проверить</button>
+        <div id="previewSection" class="preview-section hidden">
+            <div class="preview-header">
+                <h3>Предпросмотр</h3>
+                <button id="changePhoto" class="change-btn">🔄 Сменить фото</button>
+            </div>
+            
+            <div class="image-comparison">
+                <div class="image-column">
+                    <h4>Оригинал</h4>
+                    <div class="image-container">
+                        <img id="previewImg" src="" alt="Original">
+                    </div>
                 </div>
-                <div class="examples">
-                    <small>Примеры: А123АА777, Х970ХУ777, ЕКХ777</small>
+                <div class="image-column">
+                    <h4>Обработанный</h4>
+                    <div class="image-container">
+                        <canvas id="processedCanvas"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="processing-controls">
+                <button id="recognizeBtn" class="recognize-btn">
+                    🔍 Начать распознавание
+                </button>
+                <div class="processing-options">
+                    <label>
+                        <input type="checkbox" id="enhanceImage" checked>
+                        Улучшить качество изображения
+                    </label>
+                    <label>
+                        <input type="checkbox" id="detectRegion" checked>
+                        Автопоиск области номера
+                    </label>
                 </div>
             </div>
         </div>
 
-        <div id="recognitionStatus" class="recognition-status hidden">
-            <div class="spinner small"></div>
-            <p>Распознаем номер...</p>
-        </div>
-
-        <div id="recognitionResult" class="recognition-result hidden">
-            <h3>Распознанный номер:</h3>
-            <div id="recognizedPlate" class="recognized-plate"></div>
-            <button id="useRecognized" class="use-btn">✅ Использовать этот номер</button>
-            <button id="tryAgain" class="try-again-btn">🔄 Попробовать снова</button>
-        </div>
-
-        <div id="loading" class="loading hidden">
+        <div id="processing" class="processing hidden">
             <div class="spinner"></div>
-            <p>Получаем данные с Avtocod...</p>
+            <h3>Обрабатываем изображение...</h3>
+            
+            <div class="progress-steps">
+                <div class="progress-step active" id="step1">
+                    <span class="step-number">1</span>
+                    <span class="step-text">Загрузка нейросети</span>
+                </div>
+                <div class="progress-step" id="step2">
+                    <span class="step-number">2</span>
+                    <span class="step-text">Предобработка изображения</span>
+                </div>
+                <div class="progress-step" id="step3">
+                    <span class="step-number">3</span>
+                    <span class="step-text">Поиск номерной пластины</span>
+                </div>
+                <div class="progress-step" id="step4">
+                    <span class="step-number">4</span>
+                    <span class="step-text">Распознавание текста</span>
+                </div>
+                <div class="progress-step" id="step5">
+                    <span class="step-number">5</span>
+                    <span class="step-text">Валидация результата</span>
+                </div>
+            </div>
+
+            <div class="processing-details">
+                <div class="detail-item">
+                    <span class="detail-label">Статус:</span>
+                    <span class="detail-value" id="processingStatus">Инициализация...</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Прогресс:</span>
+                    <span class="detail-value" id="processingProgress">0%</span>
+                </div>
+            </div>
         </div>
 
         <div id="result" class="result hidden">
-            <div class="result-header">
-                <h3>Результат проверки</h3>
-                <div id="plateNumber" class="plate-number"></div>
+            <div class="result-header success">
+                <h3>✅ Номер распознан!</h3>
+                <div class="confidence" id="confidence"></div>
             </div>
-            <div id="screenshotContainer" class="screenshot-container">
-                <!-- Данные будут здесь -->
+
+            <div class="recognition-result">
+                <div class="plate-display">
+                    <div class="plate-number" id="recognizedPlate"></div>
+                    <div class="plate-confidence" id="plateConfidence"></div>
+                </div>
+
+                <div class="result-details">
+                    <div class="detail-card">
+                        <h4>📊 Статистика распознавания</h4>
+                        <div class="stats-grid">
+                            <div class="stat">
+                                <span class="stat-label">Уверенность:</span>
+                                <span class="stat-value" id="confidenceValue">-</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-label">Время обработки:</span>
+                                <span class="stat-value" id="processingTime">-</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-label">Размер номера:</span>
+                                <span class="stat-value" id="plateSize">-</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-label">Качество изображения:</span>
+                                <span class="stat-value" id="imageQuality">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="detail-card">
+                        <h4>🔍 Область распознавания</h4>
+                        <div class="plate-region">
+                            <canvas id="plateCanvas"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="raw-text-card">
+                    <h4>📝 Распознанный текст:</h4>
+                    <div class="raw-text" id="rawText"></div>
+                </div>
             </div>
-            <div class="actions">
-                <button id="newCheck" class="new-check-btn">Новая проверка</button>
+
+            <div class="result-actions">
+                <button id="checkAvtocod" class="avtocod-btn">📊 Проверить на Avtocod</button>
+                <button id="newRecognition" class="new-btn">🔄 Новое распознавание</button>
+                <button id="saveResult" class="save-btn">💾 Сохранить результат</button>
             </div>
         </div>
 
         <div id="error" class="error hidden">
-            <p>Произошла ошибка при получении данных</p>
-            <button id="retryButton" class="retry-btn">Попробовать снова</button>
+            <div class="error-icon">❌</div>
+            <h3 id="errorTitle">Ошибка распознавания</h3>
+            <p id="errorMessage"></p>
+            <div class="error-suggestions" id="errorSuggestions"></div>
+            <div class="error-actions">
+                <button id="retryButton" class="retry-btn">🔄 Попробовать снова</button>
+                <button id="uploadNew" class="upload-new-btn">📷 Новое фото</button>
+            </div>
+        </div>
+
+        <div class="manual-section">
+            <div class="manual-toggle" id="manualToggle">
+                <span>⌨️ Или введите номер вручную</span>
+                <span class="toggle-arrow">▼</span>
+            </div>
+            <div class="manual-input hidden" id="manualInput">
+                <div class="input-group">
+                    <input 
+                        type="text" 
+                        id="manualPlateInput" 
+                        placeholder="Например: А123АА777" 
+                        maxlength="9"
+                        class="plate-input"
+                    >
+                    <button id="manualCheckBtn" class="check-btn">Проверить</button>
+                </div>
+                <div class="examples">
+                    <small>Поддерживаемые форматы: А123АА777, Х970ХУ777, ЕКХ777, P594KC99</small>
+                </div>
+            </div>
         </div>
     </div>
 
